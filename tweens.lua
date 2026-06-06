@@ -2,28 +2,19 @@
 ---@author AstricUnion
 ---@shared
 
----@alias tweenfun fun(process: number): boolean?
+---@alias tweenfun fun(process: number): boolean? Tween function. Gets process, returns boolean, is tween ended
+
+---@class StartedTween
+---@field fun tweenfun Function to handle tween
+---@field startedAt number When this tween started, relative to curtime
+---@field processAtPause number Actual process at pausing
+---@field isPaused boolean Is tween paused
 
 ---Class to manipulate tweens
 ---@class tween
+---@field started table<number, StartedTween>
 local tween = {}
-
-
--- function Param:update(process)
---     self.from = self.from or self.property.get(self.ent)
---     local fromVal = self.from
---     local startValue = isfunction(fromVal) and fromVal() or fromVal
---     local toVal = self.to
---     local endValue = isfunction(toVal) and toVal() or toVal
---     local change = endValue - startValue
---     local eased = self.easing(process / self.duration)
---     local tweened = startValue + change * eased
---     self.property.set(self.ent, tweened)
---     local proc = self.process
---     if proc then
---         proc(eased)
---     end
--- end
+tween.started = {}
 
 
 ---@class ParamProperty
@@ -92,8 +83,6 @@ tween.ParamProperties = {
 ---@field from (any|fun(): any)?
 ---@field to (any|fun(): any)?
 ---@field easing fun(process: number)?
----@field onStart fun()?
----@field onEnd fun()?
 
 
 ---[SHARED] Create new parameter change
@@ -110,10 +99,10 @@ function tween.param(tbl)
     return function(process)
         if process < startAt then return end
         local duration = endAt - startAt
-        local fraction = math.min(process / duration, 1)
+        local fraction = math.min((process - startAt) / duration, 1)
         from = isfunction(from) and from() or from
         to = isfunction(to) and to() or to
-        local change = from - to
+        local change = to - from
         local eased = easing(fraction)
         local tweened = from + change * eased
         property.set(ent, tweened)
@@ -124,12 +113,12 @@ function tween.param(tbl)
 end
 
 ---[SHARED] Create new tween
----@param tbl tweenfun
+---@param tbl tweenfun[]
 ---@return tweenfun
 function tween.new(tbl)
     return function(process)
         local result = true
-        for _, v in tbl do
+        for _, v in ipairs(tbl) do
             if !v(process) then
                 result = false
             end
@@ -138,3 +127,57 @@ function tween.new(tbl)
     end
 end
 
+---[SHARED] Start tween in background
+---@param fun tweenfun Tween function to start
+---@return number id Identifier of tween to control it
+function tween.start(fun)
+    local id = #tween.started+1
+    tween.started[id] = {
+        fun = fun,
+        isPaused = false,
+        startedAt = timer.curtime(),
+        processAtPause = 0
+    }
+    return id
+end
+
+---[SHARED] Stop and remove tween
+---@param id number Tween to stop
+function tween.stop(id)
+    tween.started[id] = nil
+end
+
+---[SHARED] Pause tween
+---@param id number Tween to stop
+function tween.pause(id)
+    local tw = tween.started[id]
+    if !tw then return end
+    tw.isPaused = true
+    tw.processAtPause = timer.curtime() - tw.startedAt
+end
+
+---[SHARED] Unpause tween
+---@param id number Tween to stop
+function tween.unpause(id)
+    local tw = tween.started[id]
+    if !tw then return end
+    tw.isPaused = false
+    tw.startedAt = timer.curtime() - tw.processAtPause
+    tw.processAtPause = 0
+end
+
+
+local function tweenAnimations()
+    local cur = timer.curtime()
+    for i, v in pairs(tween.started) do
+        if v.isPaused then goto cont end
+        if v.fun(cur - v.startedAt) then
+            tween.started[i] = nil
+        end
+        ::cont::
+    end
+end
+
+hook.add(SERVER and "Think" or "RenderOffscreen", "TweenAnimations", tweenAnimations)
+
+return tween
