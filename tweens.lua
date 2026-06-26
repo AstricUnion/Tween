@@ -9,17 +9,32 @@
 ---@field startedAt number When this tween started, relative to curtime
 ---@field processAtPause number Actual process at pausing
 ---@field isPaused boolean Is tween paused
+---@field loop boolean Is tween looped
 
 ---Class to manipulate tweens
 ---@class tween
 ---@field started table<number, StartedTween>
+---@field id number ID of last tween
 local tween = {}
 tween.started = {}
+tween.id = 0
 
 
 ---@class ParamProperty
 ---@field get fun(self: Entity)
 ---@field set fun(self: Entity, value: any)
+---@field diff fun(from: any, to: any)
+
+local function modAngle(tbl, mod)
+    return Angle(tbl.p % mod, tbl.y % mod, tbl.r % mod)
+end
+
+-- https://stackoverflow.com/questions/2708476/rotation-interpolation#14498790
+---@param b Angle
+local function angleDiff(a, b)
+    local shortest = modAngle(modAngle(b - a, 360) + Angle(540), 360) - Angle(180)
+    return shortest
+end
 
 ---@enum ParamProperties
 tween.ParamProperties = {
@@ -33,7 +48,8 @@ tween.ParamProperties = {
     },
     ANGLES = {
         get = function(x) return x:getAngles() end,
-        set = function(x, set) x:setAngles(set) end
+        set = function(x, set) x:setAngles(set) end,
+        diff = angleDiff
     },
     LOCALPOS = {
         get = function(x) return x:getLocalPos() end,
@@ -41,7 +57,8 @@ tween.ParamProperties = {
     },
     LOCALANGLES = {
         get = function(x) return x:getLocalAngles() end,
-        set = function(x, set) x:setLocalAngles(set) end
+        set = function(x, set) x:setLocalAngles(set) end,
+        diff = angleDiff
     },
     COLOR = {
         get = function(x) return x:getColor() end,
@@ -84,6 +101,7 @@ tween.ParamProperties = {
 ---@field to (any|fun(): any)?
 ---@field easing fun(process: number)?
 
+local function linear(x) return x end
 
 ---[SHARED] Create new parameter change
 ---@param tbl TweenParam
@@ -93,18 +111,20 @@ function tween.param(tbl)
     local endAt = tbl.endAt or tbl[2]
     local ent = tbl.entity or tbl[3]
     local property = tbl.property or tbl[4] or tween.ParamProperties.NONE
-    local from = tbl.from or tbl[5] or property.get(ent)
+    local from = tbl.from or tbl[5]
     local to = tbl.to or tbl[6]
-    local easing = tbl.easing or tbl[7]
+    local easing = tbl.easing or tbl[7] or linear
     return function(process)
         if process < startAt then return end
+        if ent and !isValid(ent) then return true end
+        from = from or property.get(ent)
         local duration = endAt - startAt
         local fraction = math.min((process - startAt) / duration, 1)
-        from = isfunction(from) and from() or from
-        to = isfunction(to) and to() or to
-        local change = to - from
+        local startValue = isfunction(from) and from() or from
+        local endValue = isfunction(to) and to() or to
+        local change = property.diff and property.diff(startValue, endValue) or endValue - startValue
         local eased = easing(fraction)
-        local tweened = from + change * eased
+        local tweened = startValue + change * eased
         property.set(ent, tweened)
         if fraction == 1 then
             return true
@@ -129,16 +149,18 @@ end
 
 ---[SHARED] Start tween in background
 ---@param fun tweenfun Tween function to start
+---@param loop boolean? Loop this tween
 ---@return number id Identifier of tween to control it
-function tween.start(fun)
-    local id = #tween.started+1
-    tween.started[id] = {
+function tween.start(fun, loop)
+    tween.id = tween.id + 1
+    tween.started[tween.id] = {
         fun = fun,
         isPaused = false,
         startedAt = timer.curtime(),
-        processAtPause = 0
+        processAtPause = 0,
+        loop = loop or false
     }
-    return id
+    return tween.id
 end
 
 ---[SHARED] Stop and remove tween
@@ -172,7 +194,11 @@ local function tweenAnimations()
     for i, v in pairs(tween.started) do
         if v.isPaused then goto cont end
         if v.fun(cur - v.startedAt) then
-            tween.started[i] = nil
+            if !v.loop then
+                tween.started[i] = nil
+            else
+                v.startedAt = cur
+            end
         end
         ::cont::
     end
