@@ -132,6 +132,41 @@ function tween.param(tbl)
     end
 end
 
+
+---@class TweenLerpParam
+---@field startAt number?
+---@field entity Entity?
+---@field property ParamProperty?
+---@field ratio number?
+---@field to (any|fun(): any)?
+
+local function lerpForAll(a, b, change, t)
+    return t == 1 and b or a + change * t
+end
+
+---[SHARED] Create new lerp parameter change
+---@param tbl TweenLerpParam
+---@return tweenfun
+function tween.lerpParam(tbl)
+    local startAt = tbl.startAt or tbl[1] or 0
+    local ent = tbl.entity or tbl[2]
+    local property = tbl.property or tbl[3] or tween.ParamProperties.NONE
+    local to = tbl.to or tbl[4]
+    local ratio = tbl.ratio or tbl[5]
+    return function(process)
+        if process < startAt then return end
+        if ent and !isValid(ent) then return true end
+        local endValue = isfunction(to) and to() or to
+        local current = property.get(ent)
+        local change = property.diff and property.diff(current, endValue) or endValue - current
+        local tweened = lerpForAll(current, endValue, change, ratio)
+        property.set(ent, tweened)
+        if current == tweened then
+            return true
+        end
+    end
+end
+
 ---[SHARED] Create new tween
 ---@param tbl tweenfun[]
 ---@return tweenfun
