@@ -97,8 +97,8 @@ tween.ParamProperties = {
 ---@field endAt number?
 ---@field entity Entity?
 ---@field property ParamProperty?
----@field from (any|fun(): any)?
----@field to (any|fun(): any)?
+---@field from (any|fun(process: number): any)?
+---@field to (any|fun(process: number): any)?
 ---@field easing fun(process: number)?
 
 local function linear(x) return x end
@@ -119,14 +119,16 @@ function tween.param(tbl)
         if ent and !isValid(ent) then return true end
         from = from or property.get(ent)
         local duration = endAt - startAt
-        local fraction = math.min((process - startAt) / duration, 1)
-        local startValue = isfunction(from) and from() or from
-        local endValue = isfunction(to) and to() or to
+        local localProcess = math.min(process - startAt, duration)
+        local fraction = localProcess / duration
+        local startValue = isfunction(from) and from(localProcess) or from
+        local endValue = isfunction(to) and to(localProcess) or to
         local change = property.diff and property.diff(startValue, endValue) or endValue - startValue
         local eased = easing(fraction)
         local tweened = startValue + change * eased
         property.set(ent, tweened)
         if fraction == 1 then
+            from = nil
             return true
         end
     end
