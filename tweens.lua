@@ -135,6 +135,83 @@ function tween.param(tbl)
 end
 
 
+---@class FCurveKeyframe
+---@field [1] Vector Left handle
+---@field [2] Vector Control point
+---@field [3] Vector Right handle
+
+---@class TweenFCurveParam
+---@field startAt number?
+---@field endAt number?
+---@field entity Entity?
+---@field property ParamProperty?
+---@field type FCurveValueType?
+---@field keyframes table<string|number, FCurveKeyframe[]>?
+---@field scale number? Scale of animation
+
+
+local function longBezier(process, keyframes)
+    local len = #keyframes
+    if len < 2 then return 0 end
+    local globalProcess = math.min(process * len, len - 1)
+    local currentCurve = process == 0 and 1 or math.ceil(globalProcess)
+
+    local curve = keyframes[currentCurve]
+    local nextCurve = keyframes[currentCurve + 1]
+
+    local value = math.bezierVectorCubic(globalProcess - currentCurve + 1, curve[2], curve[3], nextCurve[1], nextCurve[2])
+
+    return value.y
+end
+
+---@alias FCurveValueType
+---| '"number"'
+---| '"location"'
+---| '"rotation_euler"'
+local FCurveValueType = {
+    ["number"] = function(process, keyframes, scale)
+        return longBezier(process, keyframes[1]) * scale
+    end,
+    ["location"] = function(process, keyframes, scale)
+        local x = longBezier(process, keyframes.x or keyframes[1] or {})
+        local y = longBezier(process, keyframes.y or keyframes[2] or {})
+        local z = longBezier(process, keyframes.z or keyframes[3] or {})
+        return Vector(x, y, z) * scale
+    end,
+    ["rotation_euler"] = function(process, keyframes, scale)
+        local p = longBezier(process, keyframes.p or keyframes[1] or {})
+        local y = longBezier(process, keyframes.y or keyframes[2] or {})
+        local r = longBezier(process, keyframes.r or keyframes[3] or {})
+        return Angle(p, y, r) * scale
+    end
+}
+
+---[SHARED] Create new F-Curve parameter change
+---@param tbl TweenFCurveParam
+---@return tweenfun
+function tween.fcurveParam(tbl)
+    local startAt = tbl.startAt or tbl[1] or 0
+    local endAt = tbl.endAt or tbl[2]
+    local ent = tbl.entity or tbl[3]
+    local property = tbl.property or tbl[4] or tween.ParamProperties.NONE
+    local type = tbl.type or tbl[5] or "number"
+    local keyframes = tbl.keyframes or tbl[6] or throw("There's no keyframes!")
+    local scale = tbl.scale or tbl[7] or 1
+    return function(process)
+        if process < startAt then return end
+        if ent and !isValid(ent) then return true end
+        local duration = endAt - startAt
+        local fraction = math.min(math.min(process - startAt, duration) / duration, 1)
+        local tweened = FCurveValueType[type](fraction, keyframes, scale)
+        property.set(ent, tweened)
+        if fraction == 1 then
+            return true
+        end
+    end
+end
+
+
+
 ---@class TweenLerpParam
 ---@field startAt number?
 ---@field entity Entity?
