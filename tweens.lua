@@ -136,9 +136,9 @@ end
 
 
 ---@class FCurveKeyframe
----@field [1] Vector Left handle
----@field [2] Vector Control point
----@field [3] Vector Right handle
+---@field [1] number[] Left handle
+---@field [2] number[] Control point
+---@field [3] number[] Right handle
 
 ---@class TweenFCurveParam
 ---@field startAt number?
@@ -158,8 +158,12 @@ local function longBezier(process, keyframes)
 
     local curve = keyframes[currentCurve]
     local nextCurve = keyframes[currentCurve + 1]
+    local start = Vector(curve[2][1], curve[2][2])
+    local tangent1 = Vector(curve[3][1], curve[3][2])
+    local tangent2 = Vector(nextCurve[1][1], nextCurve[1][2])
+    local _end = Vector(nextCurve[2][1], nextCurve[2][2])
 
-    local value = math.bezierVectorCubic(globalProcess - currentCurve + 1, curve[2], curve[3], nextCurve[1], nextCurve[2])
+    local value = math.bezierVectorCubic(globalProcess - currentCurve + 1, start, tangent1, tangent2, _end)
 
     return value.y
 end
@@ -168,6 +172,7 @@ end
 ---| '"number"'
 ---| '"location"'
 ---| '"rotation_euler"'
+---| '"rotation_quaternion"'
 local FCurveValueType = {
     ["number"] = function(process, keyframes, scale)
         return longBezier(process, keyframes[1]) * scale
@@ -176,13 +181,27 @@ local FCurveValueType = {
         local x = longBezier(process, keyframes.x or keyframes[1] or {})
         local y = longBezier(process, keyframes.y or keyframes[2] or {})
         local z = longBezier(process, keyframes.z or keyframes[3] or {})
-        return Vector(x, y, z) * scale
+        local pos = Vector(x, y, z) * scale
+        return pos
     end,
     ["rotation_euler"] = function(process, keyframes, scale)
         local p = longBezier(process, keyframes.p or keyframes[1] or {})
         local y = longBezier(process, keyframes.y or keyframes[2] or {})
         local r = longBezier(process, keyframes.r or keyframes[3] or {})
-        return Angle(p, y, r) * scale
+        -- local ang = Angle(math.deg(p), math.deg(y), math.deg(r))
+        local ang = Angle()
+        ang = ang:rotateAroundAxis(Vector(0, 1, 0), nil, p)
+        ang = ang:rotateAroundAxis(Vector(0, 0, 1), nil, y)
+        ang = ang:rotateAroundAxis(Vector(1, 0, 0), nil, r)
+        return ang
+    end,
+    ["rotation_quaternion"] = function(process, keyframes, scale)
+        local w = longBezier(process, keyframes.w or keyframes[1] or {})
+        local x = longBezier(process, keyframes.x or keyframes[2] or {})
+        local y = longBezier(process, keyframes.y or keyframes[3] or {})
+        local z = longBezier(process, keyframes.z or keyframes[4] or {})
+        local quart = Quaternion(w, x, y, z)
+        return quart:getEulerAngle() * scale
     end
 }
 
