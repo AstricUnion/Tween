@@ -168,6 +168,25 @@ local function longBezier(process, keyframes)
     return value.y
 end
 
+local function blenderRotation(p, y, r)
+    local ang = Angle()
+    ang = ang:rotateAroundAxis(Vector(0, 1, 0), p)
+    ang = ang:rotateAroundAxis(Vector(0, 0, 1), y)
+    ang = ang:rotateAroundAxis(Vector(1, 0, 0), r)
+    return ang
+end
+
+local function blenderRotationRad(p, y, r)
+    local ang = Angle()
+    ang = ang:rotateAroundAxis(Vector(0, 1, 0), nil, p)
+    ang = ang:rotateAroundAxis(Vector(0, 0, 1), nil, y)
+    ang = ang:rotateAroundAxis(Vector(1, 0, 0), nil, r)
+    return ang
+end
+
+tween.blenderRotation = blenderRotation
+
+
 ---@alias FCurveValueType
 ---| '"number"'
 ---| '"location"'
@@ -188,11 +207,7 @@ local FCurveValueType = {
         local p = longBezier(process, keyframes.p or keyframes[1] or {})
         local y = longBezier(process, keyframes.y or keyframes[2] or {})
         local r = longBezier(process, keyframes.r or keyframes[3] or {})
-        -- local ang = Angle(math.deg(p), math.deg(y), math.deg(r))
-        local ang = Angle()
-        ang = ang:rotateAroundAxis(Vector(0, 1, 0), nil, p)
-        ang = ang:rotateAroundAxis(Vector(0, 0, 1), nil, y)
-        ang = ang:rotateAroundAxis(Vector(1, 0, 0), nil, r)
+        local ang = blenderRotationRad(p, y, r)
         return ang
     end,
     ["rotation_quaternion"] = function(process, keyframes, scale)
@@ -201,7 +216,8 @@ local FCurveValueType = {
         local y = longBezier(process, keyframes.y or keyframes[3] or {})
         local z = longBezier(process, keyframes.z or keyframes[4] or {})
         local quart = Quaternion(w, x, y, z)
-        return quart:getEulerAngle() * scale
+        local ang = quart:getEulerAngle()
+        return blenderRotation(ang.p, ang.y, ang.r)
     end
 }
 
