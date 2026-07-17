@@ -152,7 +152,7 @@ end
 
 local function longBezier(process, keyframes)
     local len = #keyframes
-    if len < 2 then return 0 end
+    if len < 2 then return keyframes[1] and keyframes[1][1][2] or 0 end
     local globalProcess = math.min(process * len, len - 1)
     local currentCurve = process == 0 and 1 or math.ceil(globalProcess)
 
@@ -185,6 +185,7 @@ local function blenderRotationRad(p, y, r)
 end
 
 tween.blenderRotation = blenderRotation
+tween.blenderRotationRad = blenderRotationRad
 
 
 ---@alias FCurveValueType
@@ -207,7 +208,7 @@ local FCurveValueType = {
         local p = longBezier(process, keyframes.p or keyframes[1] or {})
         local y = longBezier(process, keyframes.y or keyframes[2] or {})
         local r = longBezier(process, keyframes.r or keyframes[3] or {})
-        local ang = blenderRotationRad(p, y, r)
+        local ang = blenderRotation(p, y, r)
         return ang
     end,
     ["rotation_quaternion"] = function(process, keyframes, scale)
@@ -353,6 +354,6 @@ local function tweenAnimations()
     end
 end
 
-hook.add(SERVER and "Think" or "RenderOffscreen", "TweenAnimations", tweenAnimations)
+hook.add("Think", "TweenAnimations", tweenAnimations)
 
 return tween
