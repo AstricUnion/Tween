@@ -159,16 +159,14 @@ local function longBezier(process, keyframes)
 
     local offset = (process * frameLen) + startFrame
     local currentCurve = len - 1
-    for i, keyframe in ipairs(keyframes) do
-        if i == 1 then goto cont end
-        local localEndFrame = keyframe[2][1]
+    for i=2, len do
+        local localEndFrame = keyframes[i][2][1]
         local position = localEndFrame - startFrame
         local positionDivided = position / frameLen
         if process < positionDivided then
             currentCurve = i - 1
             break
         end
-        ::cont::
     end
     local curve = keyframes[currentCurve]
     local nextCurve = keyframes[currentCurve + 1]
@@ -182,25 +180,6 @@ local function longBezier(process, keyframes)
 
     return value.y
 end
-
--- Old version of this
--- local function longBezier(process, keyframes)
---     local len = #keyframes
---     if len < 2 then return keyframes[1] and keyframes[1][1][2] or 0 end
---     local globalProcess = math.min(process * len, len - 1)
---     local currentCurve = process == 0 and 1 or math.ceil(globalProcess)
---
---     local curve = keyframes[currentCurve]
---     local nextCurve = keyframes[currentCurve + 1]
---     local start = Vector(curve[2][1], curve[2][2])
---     local tangent1 = Vector(curve[3][1], curve[3][2])
---     local tangent2 = Vector(nextCurve[1][1], nextCurve[1][2])
---     local _end = Vector(nextCurve[2][1], nextCurve[2][2])
---
---     local value = math.bezierVectorCubic(globalProcess - currentCurve + 1, start, tangent1, tangent2, _end)
---
---     return value.y
--- end
 
 local function blenderRotation(p, y, r)
     local ang = Angle()
